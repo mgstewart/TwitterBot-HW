@@ -8,13 +8,14 @@ import datetime as dt
 import csv
 from time import sleep
 from pprint import pprint
+import matplotlib
+matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 from matplotlib import patches as mpatches
 import seaborn as sns
 from config import consumer_key, consumer_secret, access_token, access_token_secret
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 # Force matplotlib to use a non-TK backend for Heroku support
-matplotlib.use('Agg')
 analyzer = SentimentIntensityAnalyzer()
 # Twitter API Keys
 consumer_key = consumer_key
