@@ -30,13 +30,67 @@ api = tweepy.API(auth, parser=tweepy.parsers.JSONParser())
 
 # Define functions
 def TwitterBot():
-    identify_check_request()
-    analyze_and_plot(*search_for_tweets(identify_check_request()))
+    target_sn,requester,requesting_id = identify_check_request()
+    (compound_list,
+    tweet_num_list,
+    target_sn,requester,
+    requesting_id) = search_for_tweets(target_sn,requester,requesting_id)
+    analyze_and_plot(compound_list,tweet_num_list,target_sn,requester,requesting_id)
     
-
+def identify_check_request():
+    print('Looking for a tweet that mentions me on my page...')
+    #Declare local variables
+    target_sn = ''
+    requester = ''
+    requesting_id = ''
+    list_of_targets = []
+    # Look at the most recent tweet on the bot's timeline and extract text content and author's sn
+    request_tweet = api.user_timeline('@AwayMikes',count=1,result_type='recent')
+    request_text = request_tweet[0]['text']
+    requesting_id = request_tweet[0]['id_str']
+    # Revised this to use the user_mentions key in the tweet JSON to extract the first mention
+    # that is NOT the bot's handle
+    mentioned_sns = request_tweet[0]['entities']['user_mentions']
+    for sn in mentioned_sns:
+        if sn['screen_name'] != 'AwayMikes':
+            #Concatenate the sn into a Twitter handle
+            target_sn = '@'+sn['screen_name']
+            break
+        else:
+            target_sn = 'AwayMikes'
+            print('TargetError: The most recent tweet does not contain a valid Twitter User')
+    # Open the list_of_targets datafile and read rows into memory
+    with open ('list_of_targets.csv',newline='') as csvfile:
+        target_reader = csv.reader(csvfile,delimiter=',')
+        for row in target_reader:
+            list_of_targets.append(row[0])
+    # Check to see if the target has already been analyzed
+    # if there is a Tweepy error, the bot will attempt to sleep it off
+    # if it has been analyzed, the saved analysis file will be reposted
+    if target_sn not in list_of_targets:
+        try:
+            search_for_tweets(target_sn,requester,requesting_id)
+        except tweepy.TweepError:
+            api.update_status("Something went wrong, I'm going to take a #nap")
+            gotosleep()
+    if target_sn in list_of_targets:
+        try:
+            api.update_with_media(f"{target_sn}.png",
+                                  f"I'm sorry {requester}, {target_sn} has already been analyzed. Here is the plot: ",
+                                  requesting_id)
+            gotosleep()
+        except tweepy.TweepError:
+            print("Could not find the file, kill me!")
+            gotosleep()
+    if target_sn == '@AwayMikes':
+        gotosleep()
+    return target_sn,requester,requesting_id
     
-def search_for_tweets(target_sn):
+def search_for_tweets(target_sn,requester,requesting_id):
+    print(f"Target acquired ({target_sn}), now searching for {target_sn}'s tweets!")
     tweets_ago = 0
+    # Variable for holding the oldest tweet
+    oldest_tweet = None
 
     # Variables for holding sentiments
     compound_list = []
@@ -62,10 +116,11 @@ def search_for_tweets(target_sn):
             tweet_num_list.append(tweets_ago)
             tweets_ago -= 1
                 
-    # return the lists and target_sn for next method
-    return compound_list,tweet_num_list,target_sn
+    # Return the lists and target_sn for next method
+    return compound_list,tweet_num_list,target_sn,requester,requesting_id
 
-def analyze_and_plot(compound_list,tweet_num_list,target_sn):
+def analyze_and_plot(compound_list,tweet_num_list,target_sn,requester,requesting_id):
+    print('Beginning to plot...')
     # Begin by constructing dataframe from tweet polarity lists
     tweetdf = pd.DataFrame(compound_list,columns=['Compound Score'])
     # Rename index to tweets ago value
@@ -84,48 +139,16 @@ def analyze_and_plot(compound_list,tweet_num_list,target_sn):
     # Save the file to post later
     plt.savefig((f'{target_sn}'),dpi=300)
     # Save the target to the list_of_targets.csv
-    with open ('list_of_targets.csv','w',newline='') as csvfile:
+    with open ('list_of_targets.csv','a',newline='') as csvfile:
         target_writer = csv.writer(csvfile,delimiter=',')
         target_writer.writerow([target_sn])
-    return target_sn
+    # Tweet out the generated plot
+    api.update_with_media(f"{target_sn}.png",
+                          f"Here you go {requester}, {target_sn}'s sentiment analysis: ",
+                          requesting_id)
+    # Go to sleep
+    gotosleep()
 
-def identify_check_request():
-    #Declare local variables
-    recent_sn = ''
-    requester = ''
-    requesting_id = ''
-    list_of_targets = []
-    # Look at the most recent tweet on the bot's timeline and extract text content and author's sn
-    request_tweet = api.user_timeline('@AwayMikes',count=1,result_type='recent')
-    request_text = request_tweet[0]['text']
-    requester = '@'+request_tweet[0]['user']['screen_name']
-    requesting_id = request_tweet[0]['id_str']
-    # For simplicity sake, extract the last element that was split on @
-    # presumably this will be the target SN, if it is not, it will be handled later
-    _sn_start = request_text.rfind('@')
-    at_to_end = request_text[_sn_start:]
-    split_on_space = at_to_end.split(' ')
-    recent_sn = split_on_space[0]
-    with open ('list_of_targets.csv',newline='') as csvfile:
-        target_reader = csv.reader(csvfile,delimiter=',')
-        for row in target_reader:
-            list_of_targets.append(row[0])
-    if recent_sn not in list_of_targets:
-        try:
-            search_for_tweets(recent_sn)
-        except tweepy.TweepError:
-            api.update_status("Something went wrong, I'm going to take a #nap")
-            gotosleep()
-    if recent_sn in list_of_targets:
-        try:
-            api.update_with_media(f"{recent_sn}.png",
-                                  f"I'm sorry {requester}, {recent_sn} has already been analyzed. Here is the plot: ",
-                                  requesting_id)
-        except tweepy.TweepError:
-            print("Could not find the file, kill me!")
-    if recent_sn == '@AwayMikes':
-        gotosleep()
-    return recent_sn
 
 def gotosleep():
     print("I am now going to sleep!")
