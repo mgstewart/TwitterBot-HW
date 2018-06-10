@@ -28,7 +28,7 @@ auth = tweepy.OAuthHandler(consumer_key, consumer_secret)
 auth.set_access_token(access_token, access_token_secret)
 api = tweepy.API(auth, parser=tweepy.parsers.JSONParser())
 
-# Define functions
+# Define main and peripheral functions
 def TwitterBot():
     target_sn,requester,requesting_id = identify_check_request()
     (compound_list,
@@ -45,9 +45,15 @@ def identify_check_request():
     requesting_id = ''
     list_of_targets = []
     # Look at the most recent tweet on the bot's timeline and extract text content and author's sn
-    request_tweet = api.user_timeline('@AwayMikes',count=1,result_type='recent')
+    try:
+        request_tweet = api.user_timeline('@AwayMikes',count=1,result_type='recent')
+    except tweepy.TweepError:
+        print('Something went wrong scanning my own timeline. Going to sleep.')
+        gotosleep()
+    pprint(request_tweet)
     request_text = request_tweet[0]['text']
     requesting_id = request_tweet[0]['id_str']
+    requester = '@'+request_tweet[0]['user']['screen_name']
     # Revised this to use the user_mentions key in the tweet JSON to extract the first mention
     # that is NOT the bot's handle
     mentioned_sns = request_tweet[0]['entities']['user_mentions']
@@ -83,6 +89,7 @@ def identify_check_request():
             print("Could not find the file, kill me!")
             gotosleep()
     if target_sn == '@AwayMikes':
+        print("I found a reference to myself. Gonna go to sleep.")
         gotosleep()
     return target_sn,requester,requesting_id
     
@@ -131,6 +138,7 @@ def analyze_and_plot(compound_list,tweet_num_list,target_sn,requester,requesting
     # Label x and y axes
     tweetplot.set_ylabel('Tweet Polarity')
     tweetplot.set_xlabel('Tweets Ago')
+    tweetplot.set_title(f"VADERSentimentAnalysis of {target_sn}'s Tweets")
     # Set ylimit higher than possible value to accomodate legend
     tweetplot.set_ylim(bottom=-1,top=1.25)
     # Create a patch for the legend to reflect the target_sn
@@ -143,9 +151,17 @@ def analyze_and_plot(compound_list,tweet_num_list,target_sn,requester,requesting
         target_writer = csv.writer(csvfile,delimiter=',')
         target_writer.writerow([target_sn])
     # Tweet out the generated plot
-    api.update_with_media(f"{target_sn}.png",
+    try:
+        api.update_with_media(f"{target_sn}.png",
                           f"Here you go {requester}, {target_sn}'s sentiment analysis: ",
                           requesting_id)
+    except tweepy.TweepError:
+        print("Something went wrong, going to sleep.")
+        try:
+            api.update_status("Something went wrong, I'm going to take a #nap.")
+            gotosleep()
+        except tweepy.TweepError:
+            gotosleep()
     # Go to sleep
     gotosleep()
 
