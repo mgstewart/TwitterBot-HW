@@ -57,7 +57,7 @@ def identify_check_request():
             target_sn = '@'+sn['screen_name']
             break
         else:
-            target_sn = 'AwayMikes'
+            target_sn = '@AwayMikes'
             print('TargetError: The most recent tweet does not contain a valid Twitter User')
     # Open the list_of_targets datafile and read rows into memory
     with open ('list_of_targets.csv',newline='') as csvfile:
