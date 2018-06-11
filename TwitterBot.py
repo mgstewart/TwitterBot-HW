@@ -44,27 +44,49 @@ def identify_check_request():
     requester = ''
     requesting_id = ''
     list_of_targets = []
-    # Look at the most recent tweet on the bot's timeline and extract text content and author's sn
+    # Look at the most recent tweet containing the bot's handle and extract text content and author's sn
     try:
-        request_tweet = api.user_timeline('@AwayMikes',count=1,result_type='recent')
+        request_tweet = api.search('@AwayMikes',count=1,result_type='recent')
     except tweepy.TweepError:
-        print('Something went wrong scanning my own timeline. Going to sleep.')
+        print('Something went wrong scanning the request tweet. Going to sleep.')
         gotosleep()
-    pprint(request_tweet)
-    request_text = request_tweet[0]['text']
-    requesting_id = request_tweet[0]['id_str']
-    requester = '@'+request_tweet[0]['user']['screen_name']
+    #pprint(request_tweet)
+    request_text = request_tweet['statuses'][0]['text']
+    requesting_id = request_tweet['statuses'][0]['id_str']
+    requester = '@'+request_tweet['statuses'][0]['user']['screen_name']
+    print(f"The tweet of request was: '{request_text}'.\nThis was tweeted by: {requester}.")
     # Revised this to use the user_mentions key in the tweet JSON to extract the first mention
     # that is NOT the bot's handle
-    mentioned_sns = request_tweet[0]['entities']['user_mentions']
+    mentioned_sns = request_tweet['statuses'][0]['entities']['user_mentions']
+    #print(f"The SN's mentioned in this tweet were: {mentioned_sns[]}")
     for sn in mentioned_sns:
         if sn['screen_name'] != 'AwayMikes':
             #Concatenate the sn into a Twitter handle
             target_sn = '@'+sn['screen_name']
+            print(f"Target found, the handle I will analyze is: {target_sn}. Abort handle scanning...")
             break
         else:
             target_sn = '@AwayMikes'
-            print('TargetError: The most recent tweet does not contain a valid Twitter User')
+            print('Error: Either found a reference to myself or no handles, continuing...')
+
+    # Look at the most recent post on the bot's timeline and see if it is a posted
+    # request, this will help avoid self-loops
+    try:
+        last_self_tweet = api.user_timeline('@AwayMikes',count=1,result_type='recent')
+    except tweepy.TweepError:
+        print('Something went wrong scanning my own timeline, going to sleep.')
+        gotosleep()
+    # Loop over mentioned_sn's evaluating whether the requester from search is identical to the
+    # referenced sn. This will bypass the requester and find the requested target sn
+    mentioned_sns = last_self_tweet[0]['entities']['user_mentions']
+    for sn in mentioned_sns:
+        if sn['screen_name'] != requester[1:]:
+            #Concatenate the sn into a Twitter handle
+            analyzed_sn = '@'+sn['screen_name']
+            print(f"Target found, the handle I just analyzed is: {analyzed_sn}. Abort handle scanning...")
+            break
+        else:
+            print('Error: Either found a reference to the requester or no handles, continuing...')
     # Open the list_of_targets datafile and read rows into memory
     with open ('list_of_targets.csv',newline='') as csvfile:
         target_reader = csv.reader(csvfile,delimiter=',')
@@ -73,9 +95,15 @@ def identify_check_request():
     # Check to see if the target has already been analyzed
     # if there is a Tweepy error, the bot will attempt to sleep it off
     # if it has been analyzed, the saved analysis file will be reposted
+    if analyzed_sn == target_sn:
+        print('The last post on my timeline already analyzed this user. Going to sleep.')
+        gotosleep()
+    if requester == '@AwayMikes':
+        print('I seem to have found my own tweet...ignoring and going to sleep.')
+        gotosleep()
     if target_sn not in list_of_targets:
         try:
-            search_for_tweets(target_sn,requester,requesting_id)
+            return target_sn,requester,requesting_id
         except tweepy.TweepError:
             api.update_status("Something went wrong, I'm going to take a #nap")
             gotosleep()
